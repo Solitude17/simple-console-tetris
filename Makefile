@@ -33,9 +33,8 @@ gcov_report: CFLAGS += $(GCOVFLAGS)
 
 all: 
 	make install
-	make play
 
-play: build/$(EXE)
+run: build/$(EXE)
 	./build/$(EXE)
 	
 $(OBJ_FRONTEND): %.o: %.c
