@@ -2,8 +2,8 @@
 #define FRONTEND_H
 
 #include <locale.h>
-// #include <ncurses.h>
-#include <ncurses/ncurses.h>
+#include <ncurses.h>
+// #include <ncurses/ncurses.h>
 
 #include "../../brick_game/tetris/backend.h"
 

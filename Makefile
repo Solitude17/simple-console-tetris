@@ -2,21 +2,18 @@ ifeq ($(OS),Windows_NT)
     #Windows (MSYS2)
     CC = gcc
     CFLAGS = -Wall -Wextra -std=c11
-    NCURSES_FLAGS = -I/mingw64/include/ncurses
-    NCURSES_LIBS = -L/mingw64/lib -lncursesw
+    NCURSES_FLAGS = -I C:/msys64/ucrt64/include -I C:/msys64/ucrt64/include/ncurses -L C:/msys64/ucrt64/lib -lncursesw
     CHECK_LDFLAGS = -lcheck -lsubunit -lm
-	EXE = tetris.exe
+    EXE = tetris.exe
 else
     #Linux
     CC = gcc
-	CFLAGS = -Wall -Wextra -Werror -std=c11
-	NCURSES_FLAGS = -lncurses
-	GCOVFLAGS = --coverage -fprofile-arcs -ftest-coverage
-	CHECK_LDFLAGS = -lcheck -lsubunit -lm
-	EXE = tetris.out
+    CFLAGS = -Wall -Wextra -Werror -std=c11
+    NCURSES_FLAGS = -lncurses
+    GCOVFLAGS = --coverage -fprofile-arcs -ftest-coverage
+    CHECK_LDFLAGS = -lcheck -lsubunit -lm
+    EXE = tetris.out
 endif
-
-path_to_install = build
 
 files_backend = $(wildcard ./brick_game/tetris/*.c)
 files_frontend = $(wildcard ./gui/cli/*.c)
@@ -26,6 +23,11 @@ SRC_BACKEND = $(files_backend)
 SRC_FRONTEND =  $(files_frontend)
 OBJ_BACKEND = $(SRC_BACKEND:.c=.o)
 OBJ_FRONTEND = $(SRC_FRONTEND:.c=.o)
+
+path_to_install = build
+
+
+.PHONY: all install uninstall play test dist valgrind gcov_report clean clangcheck clangcorrect cppcheck
 
 gcov_report: CFLAGS += $(GCOVFLAGS)
 
@@ -37,14 +39,14 @@ play: build/$(EXE)
 	./build/$(EXE)
 	
 $(OBJ_FRONTEND): %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $(path_to_install)/$(notdir $@)
+	$(CC) $(CFLAGS) -c $< -o $(path_to_install)/$(notdir $@) $(NCURSES_FLAGS)
 
 $(OBJ_BACKEND): %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $(path_to_install)/$(notdir $@)
 
 		
 install: $(OBJ_FRONTEND) $(OBJ_BACKEND)
-	$(CC) $(CFLAGS)  $(path_to_install)/*.o -o $(path_to_install)/run.out $(NCURSES_FLAGS)
+	$(CC) $(CFLAGS)  $(path_to_install)/*.o -o $(path_to_install)/$(EXE) $(NCURSES_FLAGS)
 
 uninstall: 
 	make clean
@@ -82,5 +84,4 @@ cppcheck:
 	cppcheck --enable=all --std=c11 --check-level=exhaustive --disable=information --suppress=missingIncludeSystem --suppress=missingInclude --suppress=checkersReport .
 
 
-.PHONY: all install uninstall play test dist valgrind gcov_report clean clangcheck clangcorrect cppcheck
 
