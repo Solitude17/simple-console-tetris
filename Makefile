@@ -1,14 +1,21 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -Werror -std=c11
-GCOVFLAGS = --coverage -fprofile-arcs -ftest-coverage
-CHECK_LDFLAGS = -lcheck -lsubunit -lm
-NCURSES_FLAGS = -lncurses
+ifeq ($(OS),Windows_NT)
+    #Windows (MSYS2)
+    CC = gcc
+    CFLAGS = -Wall -Wextra -std=c11
+    NCURSES_FLAGS = -I/mingw64/include/ncurses
+    NCURSES_LIBS = -L/mingw64/lib -lncursesw
+    CHECK_LDFLAGS = -lcheck -lsubunit -lm
+	EXE = tetris.exe
+else
+    #Linux
+    CC = gcc
+	CFLAGS = -Wall -Wextra -Werror -std=c11
+	NCURSES_FLAGS = -lncurses
+	GCOVFLAGS = --coverage -fprofile-arcs -ftest-coverage
+	CHECK_LDFLAGS = -lcheck -lsubunit -lm
+	EXE = tetris.out
+endif
 
-.PHONY: all install uninstall play test valgrind dvi dist gcov_report clean clangcheck clangcorrect cppcheck
-
-# $@ - использовать имя цели
-# $^ - использовать именина всех зависимостей цели
-# $@ - использовать имя первой зависимости
 path_to_install = build
 
 files_backend = $(wildcard ./brick_game/tetris/*.c)
@@ -20,14 +27,15 @@ SRC_FRONTEND =  $(files_frontend)
 OBJ_BACKEND = $(SRC_BACKEND:.c=.o)
 OBJ_FRONTEND = $(SRC_FRONTEND:.c=.o)
 
-
 gcov_report: CFLAGS += $(GCOVFLAGS)
 
 all: 
 	make install
 	make play
+
+play: build/$(EXE)
+	./build/$(EXE)
 	
-#удаляем путь и подставляем свой
 $(OBJ_FRONTEND): %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $(path_to_install)/$(notdir $@)
 
@@ -37,34 +45,23 @@ $(OBJ_BACKEND): %.o: %.c
 		
 install: $(OBJ_FRONTEND) $(OBJ_BACKEND)
 	$(CC) $(CFLAGS)  $(path_to_install)/*.o -o $(path_to_install)/run.out $(NCURSES_FLAGS)
-#echo "Game is installed"
-#echo "To play use "Make play"
 
 uninstall: 
 	make clean
 
-play: build/run.out
-	./build/run.out
-
 test: clean  $(OBJ_BACKEND)
 	$(CC) $(CFLAGS) -c tests/test_main.c -o tests/test_main.o
-	$(CC) $(CFLAGS) tests/*.o $(path_to_install)/*.o -o tests/run.out $(CHECK_LDFLAGS)
-	./tests/run.out
+	$(CC) $(CFLAGS) tests/*.o $(path_to_install)/*.o -o tests/$(EXE) $(CHECK_LDFLAGS)
+	./tests/$(EXE)
 
 valgrind: test
 	valgrind -q --tool=memcheck --leak-check=yes tests/run.out
-# valgrind --tool=memcheck --leak-check=yes --show-leak-kinds=all --log-file=valgrind_errors.txt ./tests/run.out
-# grep -C 5 createMatrix valgrind_errors.txt 
-
-dvi:
-	makeinfo --output=docs/manual.info docs/manual.texi 
-	info docs/manual.info
 
 dist: clean
 	zip -r $(notdir brickgame_v1).zip .
 
 gcov_report: clean test
-	./tests/run.out
+	./tests/$(EXE)
 	lcov --capture --directory . --output-file coverage.info
 	genhtml coverage.info --output-directory out
 
@@ -83,4 +80,7 @@ clangcorrect:
 
 cppcheck:
 	cppcheck --enable=all --std=c11 --check-level=exhaustive --disable=information --suppress=missingIncludeSystem --suppress=missingInclude --suppress=checkersReport .
+
+
+.PHONY: all install uninstall play test dist valgrind gcov_report clean clangcheck clangcorrect cppcheck
 
