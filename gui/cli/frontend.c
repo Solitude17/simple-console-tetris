@@ -1,14 +1,69 @@
 #include "frontend.h"
 
-void ncurses_init() {
-  // Инициализация ncurses
+// ==================== ГЕТТЕРЫ ДЛЯ ОКОН ====================
+
+static WINDOW* get_game_field(void) {
+  static WINDOW* win = NULL;
+  if (win == NULL) win = newwin(20, 10 * 2, Y_WINDOW_BIND, X_WINDOW_BIND);
+  return win;
+}
+
+static WINDOW* get_start_game_field(void) {
+  static WINDOW* win = NULL;
+  if (win == NULL) win = newwin(20, 20 + 20 + 1, Y_WINDOW_BIND, X_WINDOW_BIND);
+  return win;
+}
+
+static WINDOW* get_background(void) {
+  static WINDOW* win = NULL;
+  if (win == NULL)
+    win = newwin(20 + 2, 40 + 3, Y_WINDOW_BIND - 1, X_WINDOW_BIND - 1);
+  return win;
+}
+
+static WINDOW* get_midline(void) {
+  static WINDOW* win = NULL;
+  if (win == NULL)
+    win = newwin(20 + 2, 1, Y_WINDOW_BIND - 1, X_WINDOW_BIND + 20);
+  return win;
+}
+
+static WINDOW* get_over_game_field(void) {
+  static WINDOW* win = NULL;
+  if (win == NULL) win = newwin(20, 40, Y_WINDOW_BIND, X_WINDOW_BIND);
+  return win;
+}
+
+static WINDOW* get_score_field(void) {
+  static WINDOW* win = NULL;
+  if (win == NULL) win = newwin(20, 10 * 2, Y_WINDOW_BIND, X_WINDOW_BIND + 21);
+  return win;
+}
+
+static WINDOW* get_pause_field(void) {
+  static WINDOW* win = NULL;
+  if (win == NULL) win = newwin(7, 26, Y_WINDOW_BIND + 7, X_WINDOW_BIND + 8);
+  return win;
+}
+
+static WINDOW* get_control_field(void) {
+  static WINDOW* win = NULL;
+  if (win == NULL)
+    win = newwin(13, 40 + 3, Y_WINDOW_BIND + 1, X_WINDOW_BIND + 44);
+  return win;
+}
+
+// ==================== ИНИЦИАЛИЗАЦИЯ ====================
+
+void ncurses_init(void) {
   initscr();
   cbreak();
   noecho();
   curs_set(0);
   keypad(stdscr, TRUE);
-  nodelay(stdscr, TRUE);  // Неблокирующий ввод
+  nodelay(stdscr, TRUE);
   start_color();
+
   init_pair(1, COLOR_RED, COLOR_BLUE);
   init_pair(2, COLOR_RED, COLOR_BLUE);
   init_pair(3, COLOR_RED, COLOR_WHITE);
@@ -17,44 +72,67 @@ void ncurses_init() {
   init_pair(6, COLOR_RED, COLOR_MAGENTA);
   init_pair(7, COLOR_RED, COLOR_RED);
   init_pair(8, COLOR_RED, COLOR_CYAN);
+
+  // Создаём все окна (вызываем геттеры)
+  get_game_field();
+  get_start_game_field();
+  get_background();
+  get_over_game_field();
+  get_score_field();
+  get_pause_field();
+  get_control_field();
+
   refresh();
-  // clear();
 }
 
-void ncurses_end() {
+void ncurses_end(void) {
+  // Удаляем окна
+  if (get_game_field() != NULL) delwin(get_game_field());
+  if (get_start_game_field() != NULL) delwin(get_start_game_field());
+  if (get_background() != NULL) delwin(get_background());
+  if (get_over_game_field() != NULL) delwin(get_over_game_field());
+  if (get_score_field() != NULL) delwin(get_score_field());
+  if (get_pause_field() != NULL) delwin(get_pause_field());
+  if (get_control_field() != NULL) delwin(get_control_field());
+
   curs_set(0);
-  reset_shell_mode();  // от утечек
+  reset_shell_mode();
   endwin();
 }
-GameInfo_t updateCurrentState() {
-  print_background();
-  printScoreField();
-  GameInfo_t *game_info;
-  Figure_t *figure;
-  game_info = provideCurrentState();
-  figure = provideFigure();
 
-  WINDOW *game_field = newwin(20, 10 * 2, Y_WINDOW_BIND, X_WINDOW_BIND);
+// ==================== ОСНОВНЫЕ ФУНКЦИИ ====================
+
+GameInfo_t updateCurrentState(void) {
+  printMidline();
+  printScoreField();
+
+  GameInfo_t* game_info = provideCurrentState();
+  Figure_t* figure = provideFigure();
+  WINDOW* game_field = get_game_field();
+
+  werase(game_field);  // Очищаем перед отрисовкой
 
   for (int i = 0; i < 20; i++) {
     for (int j = 0; j < 10; j++) {
       if (game_info->field[i][j]) {
         wattron(game_field, COLOR_PAIR(game_info->field[i][j]));
-        mvwprintw(game_field, i, 2 * j, "  ");  // так рисуем блок
+        mvwprintw(game_field, i, 2 * j, "  ");
+        wattroff(game_field, COLOR_PAIR(game_info->field[i][j]));
       } else if (figure->figure[i][j]) {
         wattron(game_field, COLOR_PAIR(figure->figure[i][j]));
-        mvwprintw(game_field, i, 2 * j, "  ");  // так рисуем блок
+        mvwprintw(game_field, i, 2 * j, "  ");
+        wattroff(game_field, COLOR_PAIR(figure->figure[i][j]));
       }
     }
   }
+
   wrefresh(game_field);
-  delwin(game_field);
   return *game_info;
 }
 
 void key_input_handler(int key_input) {
-  UserAction_t *user_action;
-  user_action = provideUserAction();
+  UserAction_t* user_action = provideUserAction();
+
   switch (key_input) {
     case KEY_UP:
       *user_action = Action;
@@ -74,7 +152,8 @@ void key_input_handler(int key_input) {
     case 27:  // Esc
       *user_action = Terminate;
       break;
-    case '\n':  // Enter (может быть KEY_ENTER в некоторых терминалах)
+    case '\n':  // Enter
+    case KEY_ENTER:
       *user_action = Start;
       break;
     default:
@@ -83,18 +162,17 @@ void key_input_handler(int key_input) {
   }
 }
 
-void printStartField() {
+void printStartField(void) {
   print_background();
-  WINDOW *start_game_field =
-      newwin(20, 20 + 20 + 1, Y_WINDOW_BIND, X_WINDOW_BIND);
+  WINDOW* start_game_field = get_start_game_field();
 
+  werase(start_game_field);
   draw_text(start_game_field, 10, 10, "Press ENTER to Start");
   draw_text(start_game_field, 12, 10, "Press ESC to Exit");
   wrefresh(start_game_field);
-  delwin(start_game_field);
 }
 
-void draw_text(WINDOW *win, int y, int x, const char *text) {
+void draw_text(WINDOW* win, int y, int x, const char* text) {
   while (*text) {
     mvwaddch(win, y, x, *text);
     x++;
@@ -102,58 +180,70 @@ void draw_text(WINDOW *win, int y, int x, const char *text) {
   }
 }
 
-void print_background() {
-  WINDOW *background =
-      newwin(20 + 2, 40 + 3, Y_WINDOW_BIND - 1, X_WINDOW_BIND - 1);
+void print_background(void) {
+  WINDOW* background = get_background();
+
+  werase(background);
   wattron(background, COLOR_PAIR(8));
-  for (int i = 0; i < 22; i++) {
-    for (int j = 0; j < 43; j++) {
-      mvwprintw(background, i, j, "  ");  // так рисуем блок
-    }
-  }
+  box(background, 0, 0);
+  wattroff(background, COLOR_PAIR(8));
   wrefresh(background);
-  delwin(background);
 }
 
-void printGameOverField() {
+void printMidline(void) {
+  WINDOW* midline = get_midline();
+
+  werase(midline);
+  wattron(midline, COLOR_PAIR(8));
+  box(midline, 0, 0);
+  wattroff(midline, COLOR_PAIR(8));
+  wrefresh(midline);
+}
+
+void printGameOverField(void) {
   GameInfo_t game_info = *(provideCurrentState());
-  WINDOW *over_game_field = newwin(20, 40, Y_WINDOW_BIND, X_WINDOW_BIND);
+  int score = *(provideScore());
+  WINDOW* over_game_field = get_over_game_field();
+
+  werase(over_game_field);
+
   draw_text(over_game_field, 6, 15, "GAME  OVER");
   mvwprintw(over_game_field, 15, 8, "PRESS ENTER TO PLAY AGAIN");
-  int score = *(provideScore());
+
   if (score > game_info.high_score) {
     mvwprintw(over_game_field, 10, 15, "NEW RECORD");
   }
   mvwprintw(over_game_field, 8, 10, "Your score is %.06d", score);
 
   wrefresh(over_game_field);
-  delwin(over_game_field);
 }
 
-void printScoreField() {
-  print_background();
-  GameInfo_t *game_info;
-  game_info = provideCurrentState();
-  WINDOW *score_field = newwin(20, 10 * 2, Y_WINDOW_BIND, X_WINDOW_BIND + 21);
+void printScoreField(void) {
+  GameInfo_t* game_info = provideCurrentState();
+  WINDOW* score_field = get_score_field();
+
+  werase(score_field);
 
   if (game_info->next) {
     for (int i = 0; i < 4; i++) {
       for (int j = 0; j < 4; j++) {
         if (game_info->next[i][j]) {
           wattron(score_field, COLOR_PAIR(game_info->next[i][j]));
-          mvwprintw(score_field, i + 3, 2 * j + 6, "  ");  // так рисуем блок
+          mvwprintw(score_field, i + 3, 2 * j + 6, "  ");
+          wattroff(score_field, COLOR_PAIR(game_info->next[i][j]));
         }
       }
     }
   }
 
-  wattrset(score_field, A_NORMAL);  // сброс цвета
+  wattrset(score_field, A_NORMAL);
   draw_text(score_field, 1, 4, "NEXT FIGURE:");
   mvwprintw(score_field, 7, 7, "SCORE:");
   mvwprintw(score_field, 8, 7, "%.06d", game_info->score);
   mvwprintw(score_field, 10, 7, "LEVEL:");
   mvwprintw(score_field, 11, 9, "%.02d", game_info->level);
   mvwprintw(score_field, 13, 7, " TOP:");
+
   if (game_info->score > game_info->high_score) {
     mvwprintw(score_field, 14, 7, "%.06d", game_info->score);
   } else {
@@ -161,23 +251,23 @@ void printScoreField() {
   }
 
   wrefresh(score_field);
-
-  delwin(score_field);
 }
 
-void printPauseField() {
-  WINDOW *pause_field = newwin(7, 26, Y_WINDOW_BIND + 7, X_WINDOW_BIND + 8);
+void printPauseField(void) {
+  WINDOW* pause_field = get_pause_field();
+
+  werase(pause_field);
   mvwprintw(pause_field, 1, 1, "    GAME IS PAUSED");
   mvwprintw(pause_field, 3, 1, "Press SPACE to CONTINUE");
   mvwprintw(pause_field, 5, 1, "   Press ESC to EXIT");
   box(pause_field, 0, 0);
   wrefresh(pause_field);
-  delwin(pause_field);
 }
 
-void print_control_field() {
-  WINDOW *controlField =
-      newwin(13, 40 + 3, Y_WINDOW_BIND + 1, X_WINDOW_BIND + 44);
+void print_control_field(void) {
+  WINDOW* controlField = get_control_field();
+
+  werase(controlField);
   wattron(controlField, COLOR_PAIR(8));
   wattrset(controlField, A_NORMAL);
   mvwprintw(controlField, 2, 1, "LEFT ARROW - Move the figure to the LEFT");
@@ -186,7 +276,5 @@ void print_control_field() {
   mvwprintw(controlField, 8, 1, "DOWN ARROW - figure FALLS");
   mvwprintw(controlField, 10, 1, "SPACE  - PAUSE");
   mvwprintw(controlField, 12, 1, "ESC  - EXIT GAME");
-
   wrefresh(controlField);
-  delwin(controlField);
 }
